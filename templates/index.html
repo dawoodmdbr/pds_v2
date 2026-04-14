@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDS — Plagiarism Detection System</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="header-inner">
+      <div class="header-brand">
+        <span class="brand-name">PDS</span>
+        <span class="brand-sub">Plagiarism Detection System</span>
+      </div>
+      <span class="brand-version">v2.0</span>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── Step 1: Upload ── -->
+    <section class="card" id="section-upload">
+      <div class="card-header">
+        <span class="step-badge">1</span>
+        <h2>Upload Submissions</h2>
+      </div>
+
+      <div class="drop-zone" id="drop-zone">
+        <div class="drop-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <p class="drop-title">Drag &amp; drop files here</p>
+        <p class="drop-sub">PDF and DOCX files only · up to 100 files</p>
+        <label class="btn btn-outline" for="file-input">Browse Files</label>
+        <input type="file" id="file-input" multiple accept=".pdf,.docx" hidden />
+      </div>
+
+      <!-- File list -->
+      <div id="file-list-wrap" class="file-list-wrap hidden">
+        <div class="file-list-header">
+          <span id="file-count-label">0 files loaded</span>
+          <button class="btn-link" id="clear-btn">Clear all</button>
+        </div>
+        <div class="file-table-wrap">
+          <table class="file-table" id="file-table">
+            <thead>
+              <tr>
+                <th>Filename</th>
+                <th>Roll Number</th>
+                <th>Status</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody id="file-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Step 2: Settings ── -->
+    <section class="card" id="section-settings">
+      <div class="card-header">
+        <span class="step-badge">2</span>
+        <h2>Settings</h2>
+      </div>
+
+      <div class="settings-row">
+        <div class="setting-group">
+          <label for="threshold">Similarity Threshold (%)</label>
+          <div class="input-row">
+            <input type="range" id="threshold-range" min="0" max="100" value="70" />
+            <input type="number" id="threshold" min="0" max="100" value="70" />
+          </div>
+          <span class="setting-hint">Pairs at or above this value are flagged.</span>
+        </div>
+
+        <div class="setting-group">
+          <label for="language">Language</label>
+          <select id="language">
+            <option value="auto">Auto-Detect</option>
+            <option value="cpp">C++</option>
+            <option value="python">Python</option>
+            <option value="java">Java</option>
+          </select>
+          <span class="setting-hint">Used for comment stripping and normalization.</span>
+        </div>
+
+        <div class="setting-group legend-group">
+          <label>Colour Key</label>
+          <div class="legend">
+            <span class="legend-dot red"></span><span>≥ 90% Very High</span>
+            <span class="legend-dot orange"></span><span>≥ 70% High</span>
+            <span class="legend-dot yellow"></span><span>≥ 50% Moderate</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Step 3: Run ── -->
+    <section class="card" id="section-run">
+      <div class="card-header">
+        <span class="step-badge">3</span>
+        <h2>Run Analysis</h2>
+      </div>
+
+      <div class="run-row">
+        <button class="btn btn-primary" id="run-btn" disabled>
+          Run Analysis
+        </button>
+        <div class="spinner hidden" id="spinner">
+          <div class="spin"></div>
+          <span id="spinner-label">Analyzing…</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Step 4: Results ── -->
+    <section class="card hidden" id="section-results">
+      <div class="card-header">
+        <span class="step-badge">4</span>
+        <h2>Results</h2>
+      </div>
+
+      <!-- Summary stats -->
+      <div class="stats-row" id="stats-row"></div>
+
+      <!-- Download buttons -->
+      <div class="download-row">
+        <a class="btn btn-outline" id="dl-matrix" href="/download/matrix" download>
+          Download Similarity Matrix
+        </a>
+        <a class="btn btn-outline" id="dl-flagged" href="/download/flagged" download>
+          Download Flagged Pairs
+        </a>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" data-tab="flagged">Flagged Pairs</button>
+        <button class="tab" data-tab="all">All Pairs</button>
+      </div>
+
+      <!-- Flagged table -->
+      <div class="tab-panel active" id="tab-flagged">
+        <div class="results-table-wrap">
+          <table class="results-table" id="flagged-table">
+            <thead>
+              <tr>
+                <th>Student A</th>
+                <th>Student B</th>
+                <th>Similarity</th>
+                <th>SequenceMatcher</th>
+                <th>FuzzyToken</th>
+              </tr>
+            </thead>
+            <tbody id="flagged-tbody"></tbody>
+          </table>
+          <p class="no-results hidden" id="no-flagged">No pairs above threshold.</p>
+        </div>
+      </div>
+
+      <!-- All pairs table -->
+      <div class="tab-panel hidden" id="tab-all">
+        <div class="results-table-wrap">
+          <table class="results-table" id="all-table">
+            <thead>
+              <tr>
+                <th>Student A</th>
+                <th>Student B</th>
+                <th>Similarity</th>
+                <th>SequenceMatcher</th>
+                <th>FuzzyToken</th>
+              </tr>
+            </thead>
+            <tbody id="all-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <span>PDS v2.0 &mdash; Plagiarism Detection System &mdash; Jaccard + Cosine on token trigrams</span>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
