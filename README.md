@@ -1,53 +1,190 @@
-# PDS v2 — Plagiarism Detection System
+# PDS — Plagiarism Detection System
 
-Web-based plagiarism detection for programming assignments (PDF/DOCX).  
-Runs locally on `localhost:5000`. No internet required.
+A web-based plagiarism detection tool for programming assignments. Upload student submissions as PDF or DOCX files, run similarity analysis, and get colour-coded Excel reports — all from a clean browser interface running locally.
 
-## Setup
+Built with Python + Flask. No internet required at runtime.
 
-```bash
-pip install -r requirements.txt
-python app.py
-```
+---
 
-Then open **http://localhost:5000** in your browser.
+## Screenshots
 
-## Usage
+> Run `python app.py`, open `http://localhost:5000`, upload files, click **Run Analysis**.
 
-1. Drag & drop or browse to select student assignment files (PDF/DOCX)
-2. Set similarity threshold (default 70%) and language
-3. Click **Run Analysis**
-4. View results in browser and download both Excel reports
+---
 
 ## Features
 
-- Extracts roll numbers from inconsistent filenames (`24F-3053`, `f243071`, `24F_3053`, `24F - 3053`, etc.)
-- Handles duplicate submissions — keeps latest by filename suffix `(1)`, `(2)`
-- Parses PDF and DOCX files
-- Detects C++, Python, Java — strips comments, normalizes identifiers → `var0, var1, var2`
-- Full-file Jaccard + Cosine similarity on token trigrams
-- Browser results table + two downloadable Excel reports
+- **Drag & drop upload** — PDF and DOCX files, up to 100 submissions per run
+- **Smart roll number extraction** — handles inconsistent filename formats automatically
+- **Duplicate detection** — keeps the latest resubmission, skips older versions
+- **Language-aware preprocessing** — strips comments for C++, Python, and Java
+- **Two-metric similarity engine** — difflib SequenceMatcher + thefuzz token_set_ratio
+- **In-browser results table** — view flagged pairs and all pairs without leaving the page
+- **Two Excel reports** — similarity matrix and flagged pairs with code snippets
+- **Timestamped output** — every run saved separately, nothing overwritten
+
+---
+
+## Supported Roll Number Formats
+
+All of the following are recognised and normalised to `24F-3053`:
+
+| Format | Example |
+|---|---|
+| Standard | `24F-3053` |
+| Underscore | `24F_3053` |
+| Spaces around dash | `24F - 3053` |
+| Space before digits | `24F- 3053` |
+| Compact letter-first | `f243053` |
+| Compact year-first | `24f3053` |
+| Letter before year | `F24-3053` |
+| Numeric only | `243053` |
+
+If a roll number cannot be extracted, the raw filename is used as the student identifier and flagged with a warning.
+
+---
+
+## How It Works
+
+```
+Upload files
+     │
+     ▼
+Extract roll numbers + resolve duplicates
+     │
+     ▼
+Parse PDF / DOCX → extract text
+     │
+     ▼
+Detect language (C++ / Python / Java)
+Strip comments + normalize whitespace
+     │
+     ▼
+Pairwise similarity for every student pair
+  • difflib SequenceMatcher   (40% weight)
+  • thefuzz token_set_ratio   (60% weight)
+     │
+     ▼
+Results table in browser  +  two Excel files
+```
+
+**Why this algorithm?** `token_set_ratio` tokenizes both submissions, sorts the tokens, then compares — making it naturally robust to variable renaming, reordered lines, and added comments without needing explicit variable normalization. `SequenceMatcher` adds sensitivity to structural ordering. Together they catch copy-paste plagiarism, light obfuscation, and renamed-variable submissions reliably.
+
+---
 
 ## Output
 
-Each run saves to: `uploads/<session>/output/YYYY-MM-DD_HH-MM-SS/`
+Each run creates a timestamped folder inside `uploads/`:
 
-| File | Contents |
-|---|---|
-| `similarity_matrix_TIMESTAMP.xlsx` | N×N matrix, colour coded |
-| `flagged_pairs_TIMESTAMP.xlsx` | Flagged pairs with code snippets, ascending sort |
+```
+uploads/
+└── <session-id>/
+    └── output/
+        └── 2026-04-12_14-30-00/
+            ├── similarity_matrix_2026-04-12_14-30-00.xlsx
+            └── flagged_pairs_2026-04-12_14-30-00.xlsx
+```
 
-## Colour Key
+### similarity_matrix.xlsx
+
+N × N grid of all student pairs with similarity percentages. Colour coded:
 
 | Colour | Range | Meaning |
 |---|---|---|
-| Red | ≥ 90% | Very High |
-| Orange | ≥ 70% | High (flagged) |
-| Yellow | ≥ 50% | Moderate |
+| 🔴 Red | ≥ 90% | Very high — likely plagiarism |
+| 🟠 Orange | ≥ 70% | High — flagged for review |
+| 🟡 Yellow | ≥ 50% | Moderate — worth inspecting |
+| ⬜ White | < 50% | Low |
 
-## Run Tests
+### flagged_pairs.xlsx
+
+One row per pair above your threshold, sorted **descending** (highest similarity first). Columns:
+
+| Column | Description |
+|---|---|
+| Rank | 1 = most suspicious |
+| Student A / B | Roll numbers |
+| Similarity % | Weighted final score |
+| SequenceMatcher % | Raw difflib score |
+| FuzzyToken % | Raw thefuzz score |
+| Student A / B Code | First 1,500 chars of extracted text |
+
+---
+
+## Setup
+
+**Requirements:** Python 3.11+
 
 ```bash
-pip install pytest
-pytest tests/ -v
+# 1. Clone the repo
+git clone https://github.com/yourusername/pds.git
+cd pds
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Run
+python app.py
+
+# 4. Open in browser
+# http://localhost:5000
 ```
+
+### Dependencies
+
+| Package | Purpose |
+|---|---|
+| `flask` | Web server |
+| `pdfplumber` | PDF text extraction |
+| `python-docx` | DOCX text extraction |
+| `openpyxl` | Excel report generation |
+| `thefuzz` | Token-set fuzzy similarity |
+| `python-Levenshtein` | Speeds up thefuzz |
+| `scikit-learn` | (Reserved for future use) |
+
+---
+
+## Project Structure
+
+```
+pds/
+├── app.py                  ← Flask server + all routes
+├── requirements.txt
+├── README.md
+├── core/
+│   ├── file_handler.py     ← Roll number extraction, duplicate resolution
+│   ├── parser.py           ← PDF + DOCX text extraction
+│   ├── preprocessor.py     ← Language detection, comment stripping
+│   ├── comparator.py       ← Pairwise similarity computation
+│   └── reporter.py         ← Excel report generation
+├── templates/
+│   └── index.html          ← Single-page frontend
+├── static/
+│   ├── style.css
+│   └── app.js
+└── uploads/                ← Created at runtime (gitignored)
+```
+
+---
+
+## Usage Notes
+
+- **Scanned PDFs** (image-based) are not supported — files must be text-based
+- **One file per student** — if a student resubmits, name the new file with a `(1)` suffix (e.g. `24F-3053(1).docx`) and the system will keep it automatically
+- **Threshold** — default is 70%. Lower it to catch more pairs; raise it to reduce noise
+- The similarity score is a tool to assist human judgment — always review flagged pairs before drawing conclusions
+
+---
+
+## Limitations
+
+- No support for ZIP archives — upload files individually
+- No cross-language comparison (C++ vs Python)
+- Does not detect plagiarism from external sources (GitHub, Stack Overflow, etc.)
+- Scanned or image-based PDFs return no text and are excluded from comparison
+
+---
+
+## Tech Stack
+
+Python · Flask · pdfplumber · python-docx · thefuzz · openpyxl · Vanilla HTML/CSS/JS
