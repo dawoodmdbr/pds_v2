@@ -6,7 +6,22 @@ Built with Python + Flask. No internet required at runtime.
 
 ---
 
-## Screenshots
+## 📸 Screenshots
+
+---
+
+### Web UI
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/25e5a0df-9025-49bd-922c-943f115911dd" width="700"/>
+</p>
+
+---
+
+### Results
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/4d9ba582-fd03-41ac-ae74-a0984be4e0d2" width="700"/>
+</p>
+
 
 > Run `python app.py`, open `http://localhost:5000`, upload files, click **Run Analysis**.
 
