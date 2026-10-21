@@ -103,13 +103,38 @@ clearBtn.addEventListener('click', async () => {
   fileInput.value = '';
 });
 
-// ── Run Analysis ─────────────────────────────────────────────────────────────
+// ── Run Analysis (background job + progress polling) ─────────────────────────
+const cancelBtn = document.getElementById('cancel-btn');
+let currentJob = null;
+
+function fmtTime(sec) {
+  sec = Math.max(0, Math.round(sec));
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m ? `${m}m ${s}s` : `${s}s`;
+}
+
+function finishRun() {
+  currentJob = null;
+  setSpinner(false);
+  cancelBtn.classList.add('hidden');
+  runBtn.disabled = false;
+}
+
+cancelBtn.addEventListener('click', async () => {
+  if (!currentJob) return;
+  spinnerLabel.textContent = 'Cancelling…';
+  cancelBtn.disabled = true;
+  try { await fetch('/cancel/' + currentJob, { method: 'POST' }); } catch (_) {}
+});
+
 runBtn.addEventListener('click', async () => {
   const threshold = parseInt(threshNum.value) || 70;
   const language  = document.getElementById('language').value;
 
-  setSpinner(true, 'Running analysis…');
+  setSpinner(true, 'Starting analysis…');
   runBtn.disabled = true;
+  cancelBtn.disabled = false;
+  cancelBtn.classList.remove('hidden');
 
   try {
     const res  = await fetch('/analyze', {
@@ -118,17 +143,54 @@ runBtn.addEventListener('click', async () => {
       body: JSON.stringify({ threshold, language }),
     });
     const data = await res.json();
+    if (data.error) { alert(data.error); finishRun(); return; }
 
-    if (data.error) { alert(data.error); return; }
-
-    renderResults(data, threshold);
+    currentJob = data.job_id;
+    pollProgress(data.job_id, threshold);
   } catch (err) {
     alert('Analysis failed: ' + err.message);
-  } finally {
-    setSpinner(false);
-    runBtn.disabled = false;
+    finishRun();
   }
 });
+
+async function pollProgress(jobId, threshold) {
+  if (currentJob !== jobId) return;
+  try {
+    const res = await fetch('/progress/' + jobId);
+    const p   = await res.json();
+
+    if (p.status === 'done') {
+      finishRun();
+      renderResults(p.result, threshold);
+      return;
+    }
+    if (p.status === 'error') {
+      finishRun();
+      alert(p.error || 'Analysis failed.');
+      return;
+    }
+    if (p.status === 'cancelled') {
+      finishRun();
+      return;
+    }
+
+    // running — show stage, counts, elapsed and a rough ETA
+    let label = `${p.stage}…`;
+    if (p.total > 1 || p.stage === 'Comparing pairs') {
+      const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
+      label = `${p.stage}: ${p.done}/${p.total} (${pct}%)`;
+      if (p.stage === 'Comparing pairs' && p.done > 0) {
+        const eta = (p.elapsed / p.done) * (p.total - p.done);
+        label += ` · ~${fmtTime(eta)} left`;
+      }
+    }
+    label += ` · ${fmtTime(p.elapsed)} elapsed`;
+    spinnerLabel.textContent = label;
+  } catch (err) {
+    spinnerLabel.textContent = 'Waiting for server…';
+  }
+  setTimeout(() => pollProgress(jobId, threshold), 1000);
+}
 
 // ── Render Results ────────────────────────────────────────────────────────────
 function renderResults(data, threshold) {

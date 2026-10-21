@@ -26,7 +26,13 @@ def _similarity(text_a: str, text_b: str) -> tuple[float, float, float]:
     return final, round(seq, 1), round(fuzzy, 1)
 
 
-def compare(submissions: dict[str, str]) -> list[dict]:
+class CancelledError(Exception):
+    """Raised when the caller asks the comparison to stop."""
+
+
+def compare(submissions: dict[str, str],
+            progress_cb=None,
+            should_cancel=None) -> list[dict]:
     """
     Args:
         submissions: { roll_number: preprocessed_text_string }
@@ -45,8 +51,13 @@ def compare(submissions: dict[str, str]) -> list[dict]:
     """
     rolls   = list(submissions.keys())
     results = []
+    total   = len(rolls) * (len(rolls) - 1) // 2
 
-    for roll_a, roll_b in combinations(rolls, 2):
+    for done, (roll_a, roll_b) in enumerate(combinations(rolls, 2)):
+        if should_cancel and should_cancel():
+            raise CancelledError()
+        if progress_cb:
+            progress_cb(done, total)
         text_a = submissions[roll_a]
         text_b = submissions[roll_b]
         final, seq, fuzzy = _similarity(text_a, text_b)
@@ -57,6 +68,9 @@ def compare(submissions: dict[str, str]) -> list[dict]:
             "seq_score":   seq,
             "fuzzy_score": fuzzy,
         })
+
+    if progress_cb:
+        progress_cb(total, total)
 
     # Descending — highest similarity first
     results.sort(key=lambda r: r["similarity"], reverse=True)
