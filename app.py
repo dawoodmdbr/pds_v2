@@ -90,7 +90,6 @@ def upload():
 
 
 # ── Analyze (background job) ──────────────────────────────────────────────────
-MAX_RUNTIME_SECONDS = 15 * 60          # overall safety timeout per analysis
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
@@ -102,15 +101,8 @@ def _set(job, **kw):
 
 def _run_job(job, upload_dir: Path, threshold: float, lang_over: str):
     """Runs the full pipeline in a worker thread, reporting progress."""
-    started = job["started"]
-
     def cancelled():
-        if job["cancel"]:
-            return True
-        if time.time() - started > MAX_RUNTIME_SECONDS:
-            job["timed_out"] = True
-            return True
-        return False
+        return job["cancel"]
 
     try:
         all_files = list(upload_dir.glob("*.pdf")) + list(upload_dir.glob("*.docx"))
@@ -193,12 +185,7 @@ def _run_job(job, upload_dir: Path, threshold: float, lang_over: str):
              matrix=str(matrix_path), flagged=str(flagged_path))
 
     except CancelledError:
-        if job.get("timed_out"):
-            _set(job, status="error",
-                 error=f"Analysis stopped after {MAX_RUNTIME_SECONDS // 60} minutes "
-                       "(timeout). Try fewer or shorter files.")
-        else:
-            _set(job, status="cancelled")
+        _set(job, status="cancelled")
     except Exception as e:            # never fail silently
         traceback.print_exc()
         _set(job, status="error", error=f"{type(e).__name__}: {e}")
@@ -214,7 +201,7 @@ def analyze():
     job_id = str(uuid.uuid4())
     job = {"status": "running", "stage": "Starting", "done": 0, "total": 1,
            "detail": "", "started": time.time(), "cancel": False,
-           "timed_out": False, "sid": session["id"]}
+           "sid": session["id"]}
     with _jobs_lock:
         _jobs[job_id] = job
 
